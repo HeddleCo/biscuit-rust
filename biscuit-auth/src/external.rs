@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 //! Asynchronous signing without importing private keys into Biscuit.
 //!
 //! Prepare, sign `payload_to_sign()` in the caller, then consume the draft with
@@ -200,4 +204,56 @@ fn encode(
         version: Some(1),
     };
     Ok((wire, symbols))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{KeyPair, PrivateKey};
+
+    fn key(seed: u8) -> KeyPair {
+        let private = PrivateKey::from_bytes(&[seed; 32], Algorithm::Ed25519)
+            .expect("public test fixture seed");
+        KeyPair::from(&private)
+    }
+
+    #[test]
+    fn external_mint_append_seal_verifies() {
+        let root = key(1);
+        let chain = key(2);
+        let terminal = key(3);
+        let unsigned = UnsignedBlock::mint(
+            BiscuitBuilder::new().fact("user(\"alice\")").expect("fact"),
+            root.public(),
+            chain.public(),
+        )
+        .expect("prepare authority");
+        let signature = root
+            .sign(unsigned.payload_to_sign())
+            .expect("sign authority");
+        let draft = unsigned
+            .attach(signature.to_bytes())
+            .expect("attach authority");
+        let unsigned = draft
+            .prepare_append(
+                BlockBuilder::new()
+                    .check("check if operation(\"read\")")
+                    .expect("check"),
+                terminal.public(),
+            )
+            .expect("prepare attenuation");
+        let signature = chain
+            .sign(unsigned.payload_to_sign())
+            .expect("sign attenuation");
+        let draft = unsigned
+            .attach(signature.to_bytes())
+            .expect("attach attenuation");
+        let seal = draft.prepare_seal().expect("prepare seal");
+        let signature = terminal.sign(seal.payload_to_sign()).expect("sign seal");
+        let token = seal.attach(signature.to_bytes()).expect("attach seal");
+        Biscuit::from(&token, root.public()).expect("unchanged verifier accepts sealed chain");
+        let wire = schema::Biscuit::decode(token.as_slice()).expect("wire");
+        assert_eq!(wire.authority.version, Some(1));
+        assert_eq!(wire.blocks[0].version, Some(1));
+    }
 }
