@@ -17,8 +17,8 @@ use std::{collections::HashMap, convert::TryInto, fmt::Write};
 /// creates a Biscuit
 #[derive(Clone, Default)]
 pub struct BiscuitBuilder {
-    inner: BlockBuilder,
-    root_key_id: Option<u32>,
+    pub(crate) inner: BlockBuilder,
+    pub(crate) root_key_id: Option<u32>,
 }
 
 impl BiscuitBuilder {
