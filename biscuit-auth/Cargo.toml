@@ -49,10 +49,12 @@ chrono = { version = "0.4.26", optional = true, default-features = false, featur
   "serde",
 ] }
 serde_json = "1.0.117"
-ecdsa = { version = "0.16.9", features = ["signing", "verifying", "pem", "alloc", "pkcs8", "serde"] }
-p256 = "0.13.2"
-pkcs8 = "0.9.0"
-elliptic-curve = { version = "0.13.8", features = ["pkcs8"] }
+ecdsa = { version = "0.17", features = ["algorithm", "pem", "alloc", "pkcs8", "serde"] }
+p256 = "0.14"
+pkcs8 = { version = "0.10", features = ["pem"] }
+elliptic-curve = { version = "0.14", features = ["pkcs8"] }
+# Enforce the RUSTSEC-2026-0387 fix even when consumers reuse an older lockfile.
+crypto-bigint = { version = "0.7.6", default-features = false }
 
 [dev-dependencies]
 bencher = "0.1.5"

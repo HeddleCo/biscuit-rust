@@ -9,9 +9,34 @@ use super::error;
 use super::Signature;
 
 use p256::ecdsa::{signature::Signer, signature::Verifier, SigningKey, VerifyingKey};
-use p256::elliptic_curve::rand_core::{CryptoRng, OsRng, RngCore};
+use p256::elliptic_curve::{rand_core as rand_core_10, Generate};
 use p256::NistP256;
+use rand::rngs::OsRng;
+use rand_core::{CryptoRng, RngCore};
 use std::hash::Hash;
+
+// Keep the public rand_core 0.6 API and its byte stream while RustCrypto uses
+// rand_core 0.10. The adapter forwards the caller's cryptographic RNG unchanged.
+struct RngAdapter<'a, T>(&'a mut T);
+
+impl<T: RngCore> rand_core_10::TryRng for RngAdapter<'_, T> {
+    type Error = std::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        Ok(self.0.next_u32())
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        Ok(self.0.next_u64())
+    }
+
+    fn try_fill_bytes(&mut self, bytes: &mut [u8]) -> Result<(), Self::Error> {
+        self.0.fill_bytes(bytes);
+        Ok(())
+    }
+}
+
+impl<T: RngCore + CryptoRng> rand_core_10::TryCryptoRng for RngAdapter<'_, T> {}
 
 /// pair of cryptographic keys used to sign a token's block
 #[derive(Debug, PartialEq)]
@@ -25,7 +50,7 @@ impl KeyPair {
     }
 
     pub fn new_with_rng<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
-        let kp = SigningKey::random(rng);
+        let kp = SigningKey::generate_from_rng(&mut RngAdapter(rng));
 
         KeyPair { kp }
     }
@@ -36,12 +61,10 @@ impl KeyPair {
 
     /// deserializes from a big endian byte array
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, error::Format> {
-        // the version of generic-array used by p256 panics if the input length
-        // is incorrect (including when using `.try_into()`)
         if bytes.len() != 32 {
             return Err(Format::InvalidKeySize(bytes.len()));
         }
-        let kp = SigningKey::from_bytes(bytes.into())
+        let kp = SigningKey::from_slice(bytes)
             .map_err(|s| s.to_string())
             .map_err(Format::InvalidKey)?;
 
@@ -134,12 +157,10 @@ impl PrivateKey {
 
     /// deserializes from a big endian byte array
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, error::Format> {
-        // the version of generic-array used by p256 panics if the input length
-        // is incorrect (including when using `.try_into()`)
         if bytes.len() != 32 {
             return Err(Format::InvalidKeySize(bytes.len()));
         }
-        SigningKey::from_bytes(bytes.into())
+        SigningKey::from_slice(bytes)
             .map(PrivateKey)
             .map_err(|s| s.to_string())
             .map_err(Format::InvalidKey)
@@ -213,7 +234,7 @@ pub struct PublicKey(VerifyingKey);
 impl PublicKey {
     /// serializes to a byte array
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_encoded_point(true).to_bytes().into()
+        self.0.to_sec1_point(true).to_bytes().into()
     }
 
     /// serializes to an hex-encoded string
