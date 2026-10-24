@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use biscuit_auth::{builder::Algorithm, Biscuit, KeyPair, PrivateKey, PublicKey};
+use biscuit_auth::{builder::Algorithm, Biscuit, PrivateKey, PublicKey};
 use rand::{rngs::StdRng, SeedableRng};
 
 #[test]
@@ -12,7 +12,7 @@ fn rfc6979_signature_keeps_der_encoding() {
         Algorithm::Secp256r1,
     )
     .expect("RFC 6979 private key");
-    let key = KeyPair::from(&private);
+    let key = private;
     let expected = hex::decode(concat!(
         "3046022100efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716",
         "022100f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8"
@@ -33,7 +33,7 @@ fn rfc6979_signature_keeps_der_encoding() {
 #[test]
 fn seeded_p256_keys_keep_compressed_sec1_encoding() {
     let mut rng = StdRng::seed_from_u64(1234);
-    let key = KeyPair::new_with_rng(Algorithm::Secp256r1, &mut rng);
+    let key = PrivateKey::new_with_rng(Algorithm::Secp256r1, &mut rng);
     // The external signing key in the existing test037 fixture.
     assert_eq!(
         key.public().to_bytes_hex(),

@@ -15,12 +15,12 @@
 use prost::Message;
 
 use crate::{
-    Biscuit, PublicKey,
     builder::{Algorithm, BiscuitBuilder, BlockBuilder},
     crypto::{self, Signature},
     datalog::SymbolTable,
     error,
     format::{convert::token_block_to_proto_block, schema},
+    Biscuit, PublicKey,
 };
 
 /// Signed blocks whose next private key remains outside the library.
@@ -115,7 +115,7 @@ impl ExternalBiscuit {
         let previous = self.last();
         let signer = PublicKey::from_proto(&previous.next_key)?;
         let (block, symbols) = encode(builder, self.symbols.clone(), next)?;
-        let payload = crypto::generate_block_signature_payload_v1(
+        let payload = crypto::generate_block_signature_payload_v1::<_, PublicKey>(
             &block.block,
             &next,
             None,
@@ -134,7 +134,7 @@ impl ExternalBiscuit {
     /// Prepare the standard final proof signature. Consumes this draft.
     pub fn prepare_seal(self) -> Result<UnsignedSeal, error::Token> {
         let last = self.last();
-        let block = crypto::Block {
+        let block: crypto::Block = crypto::Block {
             data: last.block.clone(),
             next_key: PublicKey::from_proto(&last.next_key)?,
             signature: Signature::from_bytes(&last.signature)?,
@@ -209,12 +209,10 @@ fn encode(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{KeyPair, PrivateKey};
+    use crate::PrivateKey;
 
-    fn key(seed: u8) -> KeyPair {
-        let private = PrivateKey::from_bytes(&[seed; 32], Algorithm::Ed25519)
-            .expect("public test fixture seed");
-        KeyPair::from(&private)
+    fn key(seed: u8) -> PrivateKey {
+        PrivateKey::from_bytes(&[seed; 32], Algorithm::Ed25519).expect("public test fixture seed")
     }
 
     #[test]
